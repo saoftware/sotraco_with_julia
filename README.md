@@ -33,12 +33,18 @@ Pkg.add(
         "DataFrames", 
         "Dates", 
         "Statistics", 
-        "Plots"
-        
+        "Plots",
+        "MLJ", 
+        "MLJLinearModels", 
+        "BSON"
+        "JSON3"
     ]
 )
-
 
 # Exécuter Tests Unitaires
 A la racine du projet, exécuter la commande ci-après : julia --project=. tests/runtests.jl
 
+# Exécuter le projet
+julia --project=.
+include("main.jl")
+lancer_systeme_sotraco()

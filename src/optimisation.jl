@@ -1,81 +1,99 @@
-using CSV
-
-export charger_arrets, charger_frequentation, charger_lignes
+export distance_arrets, distance_totale_ligne, taux_remplissage, vitesse_moyenne_arrets, temps_trajet_arrets, optimiser_frequences
 
 """
-Chargement du fichier CSV des arrêts.
+Calcule la distance en km entre deux points géographiques
 """
-function charger_arrets(path::String)
-    df = CSV.read(path, DataFrame)
-
-    # Suppression des NA
-    dropmissing!(df)
-    df.latitude = parse.(Float64, replace.(string.(df.latitude), "," => "."))
-    df.longitude = parse.(Float64, replace.(string.(df.longitude), "," => "."))
-    
-    # Conversion champs accessibles
-    df.abribus = map(x -> x in ["Oui", "oui", "OUI", "1", 1], df.abribus)
-    df.eclairage = map(x -> x in ["Oui", "oui", "OUI", "1", 1], df.eclairage)
-
-    # Conversion des lignes desservies
-    df.lignes_desservies = [parse.(Int, split(strip(s), ",")) for s in string.(df.lignes_desservies)]
-
-    return [Arret(
-                row.id,
-                row.nom_arret,
-                row.quartier,
-                row.zone,
-                row.latitude,
-                row.longitude,
-                row.abribus,
-                row.eclairage,
-                row.lignes_desservies
-            ) for row in eachrow(df)]
+function haversine(lat1, lon1, lat2, lon2)
+    R = 6371.0  # rayon de la Terre (km)
+    dlat = deg2rad(lat2 - lat1)
+    dlon = deg2rad(lon2 - lon1)
+    a = sin(dlat/2)^2 + cos(deg2rad(lat1)) * cos(deg2rad(lat2)) * sin(dlon/2)^2
+    c = 2 * atan(sqrt(a), sqrt(1 - a))
+    return R * c
 end
 
 """
-Chargement du CSV des lignes de bus
+Calcule la distance entre deux arrêts.
 """
-function charger_lignes(path::String)
-    df = CSV.read(path, DataFrame)
-
-    dropmissing!(df)
-
-    # Nettoyage des chiffres
-    df.distance_km = parse.(Float64, replace.(string.(df.distance_km), "," => "."))
-    df.duree_trajet_min = parse.(Float64, replace.(string.(df.duree_trajet_min), "," => "."))
-    df.tarif_fcfa = parse.(Int, replace.(string.(df.tarif_fcfa), "," => ""))
-    df.frequence_min = parse.(Float64, replace.(string.(df.frequence_min), "," => "."))
-
-    return [Ligne(
-                row.id,
-                row.nom_ligne,
-                row.origine,
-                row.destination,
-                row.distance_km,
-                row.duree_trajet_min,
-                row.tarif_fcfa,
-                row.frequence_min,
-                row.statut
-            ) for row in eachrow(df)]
+function distance_arrets(a1::Arret, a2::Arret)
+    return haversine(a1.latitude, a1.longitude, a2.latitude, a2.longitude)
 end
 
 """
-Chargement du fichier CSV des fréquentations.
+Calcule la distance totale d'une ligne donnée
+en additionnant les segments consécutifs.
 """
-function charger_frequentation(path::String)
-    df = CSV.read(path, DataFrame)
-    dropmissing!(df)
+function distance_totale_ligne(arrets::Vector{Arret})
+    d = 0.0
+    for i in 1:(length(arrets) - 1)
+        d += distance_arrets(arrets[i], arrets[i+1])
+    end
+    return d
+end
 
-    return [Frequentation(
-                row.id,
-                isa(row.date, Date) ? row.date : Date(row.date, "yyyy-mm-dd"),
-                isa(row.heure, Time) ? row.heure : Time(row.heure, "HH:MM"),
-                row.ligne_id,
-                row.arret_id,
-                row.montees,
-                row.descentes,
-                row.occupation_bus,
-                row.capacite_bus
-            ) for row in eachrow(df)]
+"""
+Calcule le taux moyen de remplissage des bus
+sur un ensemble d'observations.
+"""
+function taux_remplissage(freqs::Vector{Frequentation})
+    if isempty(freqs)
+        return 0.0
+    end
+    ratios = [f.occupation_bus / f.capacite_bus for f in freqs if f.capacite_bus > 0]
+    return mean(ratios)
+end
+
+"""
+Calcul du vitesse moyenne entre deux arrêts en km/h.
+- `temps_min` : temps réel de trajet en minutes
+"""
+function vitesse_moyenne_arrets(arret1::Arret, arret2::Arret, temps_min::Float64)
+    dist = distance_arrets(arret1, arret2)  # km
+    temps_h = temps_min / 60.0              # convertir en heures
+    return dist / temps_h
+end
+
+
+"""
+Calcul du temps de trajet (en minutes) entre deux arrêts en supposant une vitesse moyenne.
+"""
+function temps_trajet_arrets(arret1::Arret, arret2::Arret; vitesse_moyenne=20.0)
+    dist = distance_arrets(arret1, arret2)  # km
+    return dist / vitesse_moyenne * 60      # minutes
+end
+
+
+"""
+Optimisation des frequences
+"""
+function optimiser_frequences(lignes::Vector{Ligne}, freqs::Vector{Frequentation}; seuil=0.75, min_freq=5, max_freq=30)
+    # Calcul taux moyen par ligne
+    taux = Dict{Int, Float64}()
+    for ligne in lignes
+        subset = filter(f -> f.ligne_id == ligne.id, freqs)
+        if !isempty(subset)
+            taux[ligne.id] = mean([f.occupation_bus / f.capacite_bus for f in subset])
+        else
+            taux[ligne.id] = 0.0
+        end
+    end
+
+    # Ajustement fréquence
+    nouvelles_freqs = Dict{Int, Int}()
+    for ligne in lignes
+        t = taux[ligne.id]
+        freq = ligne.frequence_min
+
+        if t > seuil
+            # trop rempli -> diminuer l'intervalle entre bus
+            freq = max(min_freq, Int(round(freq * (seuil / t))))
+        elseif t < seuil / 2
+            # peu rempli -> augmenter l'intervalle
+            freq = min(max_freq, Int(round(freq * (seuil / max(t, 0.01)))))
+        end
+
+        nouvelles_freqs[ligne.id] = freq
+    end
+
+    return nouvelles_freqs
 end
