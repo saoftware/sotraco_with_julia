@@ -36,10 +36,11 @@ Pkg.add(
         "Plots",
         "MLJ", 
         "MLJLinearModels", 
-        "BSON"
+        "BSON",
         "JSON3"
     ]
 )
+
 Pkg.add("FilePathsBase")
 Pkg.add("Filesystem")
 
