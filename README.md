@@ -36,10 +36,12 @@ Pkg.add(
         "Plots",
         "MLJ", 
         "MLJLinearModels", 
-        "BSON"
+        "BSON",
         "JSON3"
     ]
 )
+Pkg.add("FilePathsBase")
+Pkg.add("Filesystem")
 
 # Exécuter Tests Unitaires
 A la racine du projet, exécuter la commande ci-après : julia --project=. tests/runtests.jl

@@ -27,13 +27,15 @@ function lancer_systeme_sotraco()
                 println("4. Générer un rapport complet")
                 println("5. Visualiser les données")
                 println("6. Recommandations")
-                println("7. Quitter")
+                println("7. Fonctionnalités avancées")
+                println("8. Impact social")
+                println("9. Quitter")
 
                 print("\nVotre choix : ")
                 choix = try
                         parse(Int, readline())
                 catch
-                        println("Entrée invalide. Veuillez saisir un nombre entre 1 et 7.")
+                        println("Entrée invalide. Veuillez saisir un nombre entre 1 et 9.")
                         continue
                 end
 
@@ -137,8 +139,23 @@ function lancer_systeme_sotraco()
 
                                 println("\nRecommandation du système terminée.")
 
-                        
                         elseif choix == 7
+                                println("\n===== Fonctionnalités avancées =====")
+                                println("\nPrédiction de la demande...")
+                                arrets = TransportProjet.charger_arrets("data/arrets.csv")
+                                TransportProjet.export_model()
+                                TransportProjet.arrets_to_json(arrets, "modeles/arrets.geojson")
+                                println("Fichier GeoJSON généré : arrets.geojson")
+                                println("\nPrédiction de la demande terminée.")
+
+                        elseif choix == 8
+                                println("\nImpact social...")
+                                rapport = TransportProjet.generer_rapport_social_ecologique(arrets, lignes, freqs)
+                                
+                                println(rapport)
+                                println("\nImpact social terminée.")
+
+                        elseif choix == 9
                                 println("\nMerci d'avoir utilisé le système SOTRACO. À bientôt !")
                                 break
                         else

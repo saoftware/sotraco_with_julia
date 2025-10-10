@@ -13,5 +13,5 @@ include("analyse.jl")
 include("visualisation.jl")
 include("recommandations.jl")
 include("rapports.jl")
-
+include("prediction.jl")
 end
